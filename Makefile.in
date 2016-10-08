@@ -191,7 +191,7 @@ COMPILE		=  $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS
 # for the BINARIES that you specified above have already been done.
 #========================================================================
 
-all: wrap binaries libraries
+all: binaries libraries
 
 
 wrap: $(SWIGOUTPUT)

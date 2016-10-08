@@ -19,7 +19,7 @@ dnl	to configure the system for the local environment.
 # so you can encode the package version directly into the source files.
 #-----------------------------------------------------------------------
 
-AC_INIT([photoresize], [0.1])
+AC_INIT([tksvg], [0.1])
 
 #--------------------------------------------------------------------
 # Call TEA_INIT as the first TEA_ macro to set up initial vars.
@@ -30,7 +30,7 @@ AC_INIT([photoresize], [0.1])
 TEA_INIT([3.7])
 
 # activate C++ support
-TEA_INIT_CXX
+#TEA_INIT_CXX
 
 AC_CONFIG_AUX_DIR(tclconfig)
 
@@ -74,7 +74,7 @@ TEA_SETUP_COMPILER
 # and PKG_TCL_SOURCES.
 #-----------------------------------------------------------------------
 
-TEA_ADD_SOURCES([photoresize.cpp])
+TEA_ADD_SOURCES([tkImgSVG.c])
 TEA_ADD_HEADERS([])
 TEA_ADD_INCLUDES([])
 TEA_ADD_LIBS([])
@@ -82,8 +82,6 @@ TEA_ADD_CFLAGS([])
 TEA_ADD_STUB_SOURCES([])
 TEA_ADD_TCL_SOURCES([])
 
-# SWIG interface generation
-TEA_ADD_SWIGINTERFACE([photoresize.hpp])
 
 #--------------------------------------------------------------------
 # __CHANGE__

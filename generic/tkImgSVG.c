@@ -1,3 +1,4 @@
+/*
 //
 // Copyright (c) 2013 Mikko Mononen memon@inside.org
 //
@@ -15,62 +16,208 @@
 //    misrepresented as being the original software.
 // 3. This notice may not be removed or altered from any source distribution.
 //
+*/
 
+/* vim: set ts=8 sts=4 sw=4 : */
 #include <stdio.h>
 #include <string.h>
 #include <float.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 #define NANOSVG_IMPLEMENTATION
 #include "nanosvg.h"
 #define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvgrast.h"
 
-int main(int argc, char **argv)
+#include <tcl.h>
+#include <tk.h>
+
+static int		FileMatchSVG(Tcl_Channel chan, const char *fileName,
+			    Tcl_Obj *format, int *widthPtr, int *heightPtr,
+			    Tcl_Interp *interp);
+static int		FileReadSVG(Tcl_Interp *interp, Tcl_Channel chan,
+			    const char *fileName, Tcl_Obj *format,
+			    Tk_PhotoHandle imageHandle, int destX, int destY,
+			    int width, int height, int srcX, int srcY);
+static int		StringMatchSVG(Tcl_Obj *dataObj, Tcl_Obj *format,
+			    int *widthPtr, int *heightPtr, Tcl_Interp *interp);
+static int		StringReadSVG(Tcl_Interp *interp, Tcl_Obj *dataObj,
+			    Tcl_Obj *format, Tk_PhotoHandle imageHandle,
+			    int destX, int destY, int width, int height,
+			    int srcX, int srcY);
+
+Tk_PhotoImageFormat tkImgFmtSVG = {
+    "svg",			/* name */
+    FileMatchSVG,		/* fileMatchProc */
+    StringMatchSVG,		/* stringMatchProc */
+    FileReadSVG,		/* fileReadProc */
+    StringReadSVG,		/* stringReadProc */
+    NULL,		/* fileWriteProc */
+    NULL,		/* stringWriteProc */
+    NULL
+};
+
+static NSVGimage * ParseSVGWithOptions(const char *input, size_t length, Tcl_Obj *format);
+
+static int
+FileMatchSVG(Tcl_Channel chan, const char *fileName,
+			    Tcl_Obj *format, int *widthPtr, int *heightPtr,
+			    Tcl_Interp *interp)
 {
-	NSVGimage *image = NULL;
-	NSVGrasterizer *rast = NULL;
-	unsigned char* img = NULL;
-	int w, h;
-
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s <infile.svg> <outfile.png>\n", argv[0]);
-		exit(-1);
-	}
-
-	const char* infilename = argv[1];
-	const char *outfilename = argv[2];
-
-	printf("parsing %s\n", infilename);
-	image = nsvgParseFromFile(infilename, "px", 96.0f);
-	if (image == NULL) {
-		printf("Could not open SVG image.\n");
-		goto error;
-	}
-	w = (int)image->width;
-	h = (int)image->height;
-
-	rast = nsvgCreateRasterizer();
-	if (rast == NULL) {
-		printf("Could not init rasterizer.\n");
-		goto error;
-	}
-
-	img = malloc(w*h*4);
-	if (img == NULL) {
-		printf("Could not alloc image buffer.\n");
-		goto error;
-	}
-
-	printf("rasterizing image %d x %d\n", w, h);
-	nsvgRasterize(rast, image, 0,0,1, img, w, h, w*4);
-
-	printf("writing %s\n", outfilename);
- 	stbi_write_png(outfilename, w, h, 4, img, w*4);
-
-error:
-	nsvgDeleteRasterizer(rast);
-	nsvgDelete(image);
-
+    Tcl_Obj *dataObj = Tcl_NewObj();
+    if (Tcl_ReadChars(chan, dataObj, -1, 0) == -1) {
+	/* in case of an error reading the file */
+	Tcl_DecrRefCount(dataObj);
 	return 0;
+    }
+
+    int result = StringMatchSVG(dataObj, format, widthPtr, heightPtr, interp);
+    
+    Tcl_DecrRefCount(dataObj);
+    
+    return result;
 }
+
+static int
+FileReadSVG(Tcl_Interp *interp, Tcl_Channel chan,
+			    const char *fileName, Tcl_Obj *format,
+			    Tk_PhotoHandle imageHandle, int destX, int destY,
+			    int width, int height, int srcX, int srcY)
+{
+    Tcl_Obj *dataObj = Tcl_NewObj();
+    if (Tcl_ReadChars(chan, dataObj, -1, 0) == -1) {
+	/* in case of an error reading the file */
+	Tcl_DecrRefCount(dataObj);
+	return 0;
+    }
+
+    int result = StringReadSVG(interp, dataObj, format, imageHandle, 
+	destX, destY, width, height, srcX, srcY);
+    
+    Tcl_DecrRefCount(dataObj);
+    
+    return result;
+}
+
+
+static int
+StringMatchSVG(Tcl_Obj *dataObj, Tcl_Obj *format,
+			    int *widthPtr, int *heightPtr, Tcl_Interp *interp)
+{
+
+    int length;
+    const char *data = Tcl_GetStringFromObj(dataObj, &length);
+    NSVGimage* nsvgimage = ParseSVGWithOptions(data, length, format);
+    if (nsvgimage != NULL) {
+	/* Stupid interface: after parsing the file we destroy the parse 
+	 * The image is parsed again on StringReadSVG */
+	*widthPtr = nsvgimage -> width;
+	*heightPtr = nsvgimage -> height;
+	nsvgDelete(nsvgimage);
+	return 1;
+    }
+    return 0;
+}
+
+static int
+StringReadSVG(Tcl_Interp *interp, Tcl_Obj *dataObj,
+			    Tcl_Obj *format, Tk_PhotoHandle imageHandle,
+			    int destX, int destY, int width, int height,
+			    int srcX, int srcY)
+{   
+
+    int length;
+    const char *data = Tcl_GetStringFromObj(dataObj, &length);
+    NSVGimage* nsvgimage = ParseSVGWithOptions(data, length, format);
+    
+    if (nsvgimage == NULL) {
+	Tcl_SetResult(interp, "Cannot parse SVG image", TCL_STATIC);
+	return TCL_ERROR;
+    }
+
+    
+    int w = nsvgimage -> width;
+    int h = nsvgimage -> height; 
+    NSVGrasterizer *rast = nsvgCreateRasterizer();
+   
+    if (rast == NULL) {
+	Tcl_SetResult(interp, "SVG: Could not initialize rasterizer", TCL_STATIC);
+	goto cleanAST;
+    }
+
+    unsigned char *imgdata = ckalloc(w*h*4);
+    if (imgdata == NULL) {
+	Tcl_SetResult(interp, "Could not alloc image buffer", TCL_STATIC);
+	goto cleanRAST;
+    }
+
+    nsvgRasterize(rast, nsvgimage, 0,0,1, imgdata, w, h, w*4);
+    
+    /* transfer the data to a photo block */
+    Tk_PhotoImageBlock svgblock;
+    svgblock.pixelPtr = imgdata;
+    svgblock.width = w;
+    svgblock.height = h;
+    svgblock.pitch = w*4;
+    svgblock.pixelSize = 4;
+    for (int c=0; c<=3; c++) {
+	svgblock.offset[c]=c;
+    }
+
+    if (Tk_PhotoExpand(interp, imageHandle,
+	    destX + width, destY + height) != TCL_OK) {
+	goto cleanRAST;
+    }
+
+    if (Tk_PhotoPutBlock(interp, imageHandle, &svgblock, destX, destY,
+		width, height, TK_PHOTO_COMPOSITE_SET) != TCL_OK) {
+	goto cleanimg;
+    }
+
+
+    ckfree(imgdata);
+    nsvgDeleteRasterizer(rast);
+    nsvgDelete(nsvgimage);
+    return TCL_OK;
+
+cleanimg:
+    ckfree(imgdata);
+    
+cleanRAST:
+    nsvgDeleteRasterizer(rast);
+
+cleanAST:
+    nsvgDelete(nsvgimage);
+    return TCL_ERROR;
+}
+
+
+static NSVGimage * ParseSVGWithOptions(const char *input, size_t length, Tcl_Obj *format) {
+    /* The parser destroys the original input string, therfore first duplicate */
+    char *input_dup = ckalloc(length+1);
+    memcpy(input_dup, input, length);
+    input_dup[length]='\0';
+    
+    /* here we should read the options (dpi) from format TODO */
+    NSVGimage *nsvgi = nsvgParse(input_dup, "px", 96.0);
+    ckfree(input_dup);
+    
+    return nsvgi;
+}
+
+int Tksvg_Init(Tcl_Interp* interp) {
+    if (interp == 0) return TCL_ERROR;
+
+    if (Tcl_InitStubs(interp, TCL_VERSION, 0) == NULL) {
+	return TCL_ERROR;
+    }
+
+    if (Tk_InitStubs(interp, TCL_VERSION, 0) == NULL) {
+	return TCL_ERROR;
+    }
+
+    Tk_CreatePhotoImageFormat(&tkImgFmtSVG);
+
+    Tcl_PkgProvide(interp, PACKAGE_NAME, PACKAGE_VERSION);
+
+    return TCL_OK;
+}
+
