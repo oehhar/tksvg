@@ -29,6 +29,22 @@
 extern "C" {
 #endif
 
+#ifndef NANOSVG_SCOPE
+#define NANOSVG_SCOPE
+#endif
+
+#ifndef NANOSVG_malloc
+#define NANOSVG_malloc malloc
+#endif
+
+#ifndef NANOSVG_realloc
+#define NANOSVG_realloc realloc
+#endif
+
+#ifndef NANOSVG_free
+#define NANOSVG_free free
+#endif
+
 typedef struct NSVGrasterizer NSVGrasterizer;
 
 /* Example Usage:
@@ -44,7 +60,7 @@ typedef struct NSVGrasterizer NSVGrasterizer;
 */
 
 // Allocated rasterizer context.
-NSVGrasterizer* nsvgCreateRasterizer();
+NANOSVG_SCOPE NSVGrasterizer* nsvgCreateRasterizer();
 
 // Rasterizes SVG image, returns RGBA image (non-premultiplied alpha)
 //   r - pointer to rasterizer context
@@ -55,12 +71,12 @@ NSVGrasterizer* nsvgCreateRasterizer();
 //   w - width of the image to render
 //   h - height of the image to render
 //   stride - number of bytes per scaleline in the destination buffer
-void nsvgRasterize(NSVGrasterizer* r,
+NANOSVG_SCOPE void nsvgRasterize(NSVGrasterizer* r,
 				   NSVGimage* image, float tx, float ty, float scale,
 				   unsigned char* dst, int w, int h, int stride);
 
 // Deletes rasterizer context.
-void nsvgDeleteRasterizer(NSVGrasterizer*);
+NANOSVG_SCOPE void nsvgDeleteRasterizer(NSVGrasterizer*);
 
 
 #ifdef __cplusplus
@@ -143,9 +159,10 @@ struct NSVGrasterizer
 	int width, height, stride;
 };
 
+NANOSVG_SCOPE
 NSVGrasterizer* nsvgCreateRasterizer()
 {
-	NSVGrasterizer* r = (NSVGrasterizer*)malloc(sizeof(NSVGrasterizer));
+	NSVGrasterizer* r = (NSVGrasterizer*)NANOSVG_malloc(sizeof(NSVGrasterizer));
 	if (r == NULL) goto error;
 	memset(r, 0, sizeof(NSVGrasterizer));
 
@@ -159,6 +176,7 @@ error:
 	return NULL;
 }
 
+NANOSVG_SCOPE
 void nsvgDeleteRasterizer(NSVGrasterizer* r)
 {
 	NSVGmemPage* p;
@@ -168,16 +186,16 @@ void nsvgDeleteRasterizer(NSVGrasterizer* r)
 	p = r->pages;
 	while (p != NULL) {
 		NSVGmemPage* next = p->next;
-		free(p);
+		NANOSVG_free(p);
 		p = next;
 	}
 
-	if (r->edges) free(r->edges);
-	if (r->points) free(r->points);
-	if (r->points2) free(r->points2);
-	if (r->scanline) free(r->scanline);
+	if (r->edges) NANOSVG_free(r->edges);
+	if (r->points) NANOSVG_free(r->points);
+	if (r->points2) NANOSVG_free(r->points2);
+	if (r->scanline) NANOSVG_free(r->scanline);
 
-	free(r);
+	NANOSVG_free(r);
 }
 
 static NSVGmemPage* nsvg__nextPage(NSVGrasterizer* r, NSVGmemPage* cur)
@@ -190,7 +208,7 @@ static NSVGmemPage* nsvg__nextPage(NSVGrasterizer* r, NSVGmemPage* cur)
 	}
 
 	// Alloc new page
-	newp = (NSVGmemPage*)malloc(sizeof(NSVGmemPage));
+	newp = (NSVGmemPage*)NANOSVG_malloc(sizeof(NSVGmemPage));
 	if (newp == NULL) return NULL;
 	memset(newp, 0, sizeof(NSVGmemPage));
 
@@ -246,7 +264,7 @@ static void nsvg__addPathPoint(NSVGrasterizer* r, float x, float y, int flags)
 
 	if (r->npoints+1 > r->cpoints) {
 		r->cpoints = r->cpoints > 0 ? r->cpoints * 2 : 64;
-		r->points = (NSVGpoint*)realloc(r->points, sizeof(NSVGpoint) * r->cpoints);
+		r->points = (NSVGpoint*)NANOSVG_realloc(r->points, sizeof(NSVGpoint) * r->cpoints);
 		if (r->points == NULL) return;
 	}
 
@@ -261,7 +279,7 @@ static void nsvg__appendPathPoint(NSVGrasterizer* r, NSVGpoint pt)
 {
 	if (r->npoints+1 > r->cpoints) {
 		r->cpoints = r->cpoints > 0 ? r->cpoints * 2 : 64;
-		r->points = (NSVGpoint*)realloc(r->points, sizeof(NSVGpoint) * r->cpoints);
+		r->points = (NSVGpoint*)NANOSVG_realloc(r->points, sizeof(NSVGpoint) * r->cpoints);
 		if (r->points == NULL) return;
 	}
 	r->points[r->npoints] = pt;
@@ -272,7 +290,7 @@ static void nsvg__duplicatePoints(NSVGrasterizer* r)
 {
 	if (r->npoints > r->cpoints2) {
 		r->cpoints2 = r->npoints;
-		r->points2 = (NSVGpoint*)realloc(r->points2, sizeof(NSVGpoint) * r->cpoints2);
+		r->points2 = (NSVGpoint*)NANOSVG_realloc(r->points2, sizeof(NSVGpoint) * r->cpoints2);
 		if (r->points2 == NULL) return;
 	}
 
@@ -290,7 +308,7 @@ static void nsvg__addEdge(NSVGrasterizer* r, float x0, float y0, float x1, float
 
 	if (r->nedges+1 > r->cedges) {
 		r->cedges = r->cedges > 0 ? r->cedges * 2 : 64;
-		r->edges = (NSVGedge*)realloc(r->edges, sizeof(NSVGedge) * r->cedges);
+		r->edges = (NSVGedge*)NANOSVG_realloc(r->edges, sizeof(NSVGedge) * r->cedges);
 		if (r->edges == NULL) return;
 	}
 
@@ -1357,6 +1375,7 @@ static void dumpEdges(NSVGrasterizer* r, const char* name)
 }
 */
 
+NANOSVG_SCOPE
 void nsvgRasterize(NSVGrasterizer* r,
 				   NSVGimage* image, float tx, float ty, float scale,
 				   unsigned char* dst, int w, int h, int stride)
@@ -1373,7 +1392,7 @@ void nsvgRasterize(NSVGrasterizer* r,
 
 	if (w > r->cscanline) {
 		r->cscanline = w;
-		r->scanline = (unsigned char*)realloc(r->scanline, w);
+		r->scanline = (unsigned char*)NANOSVG_realloc(r->scanline, w);
 		if (r->scanline == NULL) return;
 	}
 

@@ -69,6 +69,22 @@ extern "C" {
 	nsvgDelete(image);
 */
 
+#ifndef NANOSVG_SCOPE
+#define NANOSVG_SCOPE
+#endif
+
+#ifndef NANOSVG_malloc
+#define NANOSVG_malloc malloc
+#endif
+
+#ifndef NANOSVG_realloc
+#define NANOSVG_realloc realloc
+#endif
+
+#ifndef NANOSVG_free
+#define NANOSVG_free free
+#endif
+
 enum NSVGpaintType {
 	NSVG_PAINT_NONE = 0,
 	NSVG_PAINT_COLOR = 1,
@@ -160,14 +176,14 @@ typedef struct NSVGimage
 } NSVGimage;
 
 // Parses SVG file from a file, returns SVG image as paths.
-NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi);
+NANOSVG_SCOPE NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi);
 
 // Parses SVG file from a null terminated string, returns SVG image as paths.
 // Important note: changes the string.
-NSVGimage* nsvgParse(char* input, const char* units, float dpi);
+NANOSVG_SCOPE NSVGimage* nsvgParse(char* input, const char* units, float dpi);
 
 // Deletes list of paths.
-void nsvgDelete(NSVGimage* image);
+NANOSVG_SCOPE void nsvgDelete(NSVGimage* image);
 
 #ifdef __cplusplus
 };
@@ -311,6 +327,7 @@ static void nsvg__parseElement(char* s,
 		(*endelCb)(ud, name);
 }
 
+NANOSVG_SCOPE
 int nsvg__parseXML(char* input,
 				   void (*startelCb)(void* ud, const char* el, const char** attr),
 				   void (*endelCb)(void* ud, const char* el),
@@ -600,11 +617,11 @@ static void nsvg__curveBounds(float* bounds, float* curve)
 static NSVGparser* nsvg__createParser()
 {
 	NSVGparser* p;
-	p = (NSVGparser*)malloc(sizeof(NSVGparser));
+	p = (NSVGparser*)NANOSVG_malloc(sizeof(NSVGparser));
 	if (p == NULL) goto error;
 	memset(p, 0, sizeof(NSVGparser));
 
-	p->image = (NSVGimage*)malloc(sizeof(NSVGimage));
+	p->image = (NSVGimage*)NANOSVG_malloc(sizeof(NSVGimage));
 	if (p->image == NULL) goto error;
 	memset(p->image, 0, sizeof(NSVGimage));
 
@@ -628,8 +645,8 @@ static NSVGparser* nsvg__createParser()
 
 error:
 	if (p) {
-		if (p->image) free(p->image);
-		free(p);
+		if (p->image) NANOSVG_free(p->image);
+		NANOSVG_free(p);
 	}
 	return NULL;
 }
@@ -639,8 +656,8 @@ static void nsvg__deletePaths(NSVGpath* path)
 	while (path) {
 		NSVGpath *next = path->next;
 		if (path->pts != NULL)
-			free(path->pts);
-		free(path);
+			NANOSVG_free(path->pts);
+		NANOSVG_free(path);
 		path = next;
 	}
 }
@@ -648,7 +665,7 @@ static void nsvg__deletePaths(NSVGpath* path)
 static void nsvg__deletePaint(NSVGpaint* paint)
 {
 	if (paint->type == NSVG_PAINT_LINEAR_GRADIENT || paint->type == NSVG_PAINT_RADIAL_GRADIENT)
-		free(paint->gradient);
+		NANOSVG_free(paint->gradient);
 }
 
 static void nsvg__deleteGradientData(NSVGgradientData* grad)
@@ -656,8 +673,8 @@ static void nsvg__deleteGradientData(NSVGgradientData* grad)
 	NSVGgradientData* next;
 	while (grad != NULL) {
 		next = grad->next;
-		free(grad->stops);
-		free(grad);
+		NANOSVG_free(grad->stops);
+		NANOSVG_free(grad);
 		grad = next;
 	}
 }
@@ -668,8 +685,8 @@ static void nsvg__deleteParser(NSVGparser* p)
 		nsvg__deletePaths(p->plist);
 		nsvg__deleteGradientData(p->gradients);
 		nsvgDelete(p->image);
-		free(p->pts);
-		free(p);
+		NANOSVG_free(p->pts);
+		NANOSVG_free(p);
 	}
 }
 
@@ -682,7 +699,7 @@ static void nsvg__addPoint(NSVGparser* p, float x, float y)
 {
 	if (p->npts+1 > p->cpts) {
 		p->cpts = p->cpts ? p->cpts*2 : 8;
-		p->pts = (float*)realloc(p->pts, p->cpts*2*sizeof(float));
+		p->pts = (float*)NANOSVG_realloc(p->pts, p->cpts*2*sizeof(float));
 		if (!p->pts) return;
 	}
 	p->pts[p->npts*2+0] = x;
@@ -821,7 +838,7 @@ static NSVGgradient* nsvg__createGradient(NSVGparser* p, const char* id, const f
 	}
 	if (stops == NULL) return NULL;
 
-	grad = (NSVGgradient*)malloc(sizeof(NSVGgradient) + sizeof(NSVGgradientStop)*(nstops-1));
+	grad = (NSVGgradient*)NANOSVG_malloc(sizeof(NSVGgradient) + sizeof(NSVGgradientStop)*(nstops-1));
 	if (grad == NULL) return NULL;
 
 	// The shape width and height.
@@ -925,7 +942,7 @@ static void nsvg__addShape(NSVGparser* p)
 	if (p->plist == NULL)
 		return;
 
-	shape = (NSVGshape*)malloc(sizeof(NSVGshape));
+	shape = (NSVGshape*)NANOSVG_malloc(sizeof(NSVGshape));
 	if (shape == NULL) goto error;
 	memset(shape, 0, sizeof(NSVGshape));
 
@@ -1007,7 +1024,7 @@ static void nsvg__addShape(NSVGparser* p)
 	return;
 
 error:
-	if (shape) free(shape);
+	if (shape) NANOSVG_free(shape);
 }
 
 static void nsvg__addPath(NSVGparser* p, char closed)
@@ -1024,11 +1041,11 @@ static void nsvg__addPath(NSVGparser* p, char closed)
 	if (closed)
 		nsvg__lineTo(p, p->pts[0], p->pts[1]);
 
-	path = (NSVGpath*)malloc(sizeof(NSVGpath));
+	path = (NSVGpath*)NANOSVG_malloc(sizeof(NSVGpath));
 	if (path == NULL) goto error;
 	memset(path, 0, sizeof(NSVGpath));
 
-	path->pts = (float*)malloc(p->npts*2*sizeof(float));
+	path->pts = (float*)NANOSVG_malloc(p->npts*2*sizeof(float));
 	if (path->pts == NULL) goto error;
 	path->closed = closed;
 	path->npts = p->npts;
@@ -1061,8 +1078,8 @@ static void nsvg__addPath(NSVGparser* p, char closed)
 
 error:
 	if (path != NULL) {
-		if (path->pts != NULL) free(path->pts);
-		free(path);
+		if (path->pts != NULL) NANOSVG_free(path->pts);
+		NANOSVG_free(path);
 	}
 }
 
@@ -2455,7 +2472,7 @@ static void nsvg__parseSVG(NSVGparser* p, const char** attr)
 static void nsvg__parseGradient(NSVGparser* p, const char** attr, char type)
 {
 	int i;
-	NSVGgradientData* grad = (NSVGgradientData*)malloc(sizeof(NSVGgradientData));
+	NSVGgradientData* grad = (NSVGgradientData*)NANOSVG_malloc(sizeof(NSVGgradientData));
 	if (grad == NULL) return;
 	memset(grad, 0, sizeof(NSVGgradientData));
 	grad->units = NSVG_OBJECT_SPACE;
@@ -2542,7 +2559,7 @@ static void nsvg__parseGradientStop(NSVGparser* p, const char** attr)
 	if (grad == NULL) return;
 
 	grad->nstops++;
-	grad->stops = (NSVGgradientStop*)realloc(grad->stops, sizeof(NSVGgradientStop)*grad->nstops);
+	grad->stops = (NSVGgradientStop*)NANOSVG_realloc(grad->stops, sizeof(NSVGgradientStop)*grad->nstops);
 	if (grad->stops == NULL) return;
 
 	// Insert
@@ -2777,6 +2794,7 @@ static void nsvg__scaleToViewbox(NSVGparser* p, const char* units)
 	}
 }
 
+NANOSVG_SCOPE
 NSVGimage* nsvgParse(char* input, const char* units, float dpi)
 {
 	NSVGparser* p;
@@ -2801,6 +2819,7 @@ NSVGimage* nsvgParse(char* input, const char* units, float dpi)
 	return ret;
 }
 
+NANOSVG_SCOPE
 NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi)
 {
 	FILE* fp = NULL;
@@ -2813,23 +2832,24 @@ NSVGimage* nsvgParseFromFile(const char* filename, const char* units, float dpi)
 	fseek(fp, 0, SEEK_END);
 	size = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
-	data = (char*)malloc(size+1);
+	data = (char*)NANOSVG_malloc(size+1);
 	if (data == NULL) goto error;
 	if (fread(data, 1, size, fp) != size) goto error;
 	data[size] = '\0';	// Must be null terminated.
 	fclose(fp);
 	image = nsvgParse(data, units, dpi);
-	free(data);
+	NANOSVG_free(data);
 
 	return image;
 
 error:
 	if (fp) fclose(fp);
-	if (data) free(data);
+	if (data) NANOSVG_free(data);
 	if (image) nsvgDelete(image);
 	return NULL;
 }
 
+NANOSVG_SCOPE
 void nsvgDelete(NSVGimage* image)
 {
 	NSVGshape *snext, *shape;
@@ -2840,10 +2860,10 @@ void nsvgDelete(NSVGimage* image)
 		nsvg__deletePaths(shape->paths);
 		nsvg__deletePaint(&shape->fill);
 		nsvg__deletePaint(&shape->stroke);
-		free(shape);
+		NANOSVG_free(shape);
 		shape = snext;
 	}
-	free(image);
+	NANOSVG_free(image);
 }
 
 #endif
