@@ -26,6 +26,9 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
 #include <math.h>
 #include <float.h>
 #define NANOSVG_malloc	ckalloc
@@ -505,7 +508,7 @@ FreeCache(ClientData clientData, Tcl_Interp *interp)
     ckfree(cachePtr);
 }
 
-int
+int DLLEXPORT
 Tksvg_Init(Tcl_Interp *interp)
 {
     NSVGcache *cachePtr;
