@@ -1,5 +1,21 @@
 /*
+ * tkImgSVGnano.c
  *
+ *	A photo file handler for SVG files.
+ *
+ * Copyright (c) 2013-14 Mikko Mononen memon@inside.org
+ * Copyright (c) 2018 Christian Gollwitzer auriocus@gmx.de
+ * Copyright (c) 2018 Rene Zaumseil r.zaumseil@freenet.de
+ *
+ * See the file "license.terms" for information on usage and redistribution of
+ * this file, and for a DISCLAIMER OF ALL WARRANTIES.
+ *
+ * This handler is build using the original nanosvg library files from
+ * https://github.com/memononen/nanosvg 
+ *
+ *
+ * Below is the original copyright for nanoSVG
+ * 
  * Copyright (c) 2013 Mikko Mononen memon@inside.org
  *
  * This software is provided 'as-is', without any express or implied
@@ -50,6 +66,19 @@ typedef struct {
     double scale;
 } RastOpts;
 
+/*
+ * Per interp cache of last NSVGimage which was matched to
+ * be immediately rasterized after the match. This helps to
+ * eliminate double parsing of the SVG file/string.
+ */
+
+typedef struct {
+    ClientData dataOrChan;
+    Tcl_DString formatString;
+    NSVGimage *nsvgImage;
+    RastOpts ropts;
+} NSVGcache;
+
 static int		FileMatchSVG(Tcl_Channel chan, const char *fileName,
 			    Tcl_Obj *format, int *widthPtr, int *heightPtr,
 			    Tcl_Interp *interp);
@@ -70,6 +99,7 @@ static int		RasterizeSVG(Tcl_Interp *interp,
 			    Tk_PhotoHandle imageHandle, NSVGimage *nsvgImage,
 			    int destX, int destY, int width, int height,
 			    int srcX, int srcY, RastOpts *ropts);
+static NSVGcache *	GetCachePtr(Tcl_Interp *interp);
 static int		CacheSVG(Tcl_Interp *interp, ClientData dataOrChan,
 			    Tcl_Obj *formatObj, NSVGimage *nsvgImage,
 			    RastOpts *ropts);
@@ -78,7 +108,11 @@ static NSVGimage *	GetCachedSVG(Tcl_Interp *interp, ClientData dataOrChan,
 static void		CleanCache(Tcl_Interp *interp);
 static void		FreeCache(ClientData clientData, Tcl_Interp *interp);
 
-static Tk_PhotoImageFormat tkImgFmtSVG = {
+/*
+ * The format record for the SVG nano file format:
+ */
+
+static Tk_PhotoImageFormat tkImgFmtSVGnano = {
     "svg",			/* name */
     FileMatchSVG,		/* fileMatchProc */
     StringMatchSVG,		/* stringMatchProc */
@@ -90,17 +124,22 @@ static Tk_PhotoImageFormat tkImgFmtSVG = {
 };
 
 /*
- * Per interp cache of last NSVGimage which was matched to
- * be immediately rasterized after the match. This helps to
- * eliminate double parsing of the SVG file/string.
+ *----------------------------------------------------------------------
+ *
+ * FileMatchSVG --
+ *
+ *	This function is invoked by the photo image type to see if a file
+ *	contains image data in SVG format.
+ *
+ * Results:
+ *	The return value is >0 if the file can be successfully parsed,
+ *	and 0 otherwise.
+ *
+ * Side effects:
+ *	The file is saved in the internal cache for further use.
+ *
+ *----------------------------------------------------------------------
  */
-
-typedef struct {
-    ClientData dataOrChan;
-    Tcl_DString formatString;
-    NSVGimage *nsvgImage;
-    RastOpts ropts;
-} NSVGcache;
 
 static int
 FileMatchSVG(
@@ -126,8 +165,12 @@ FileMatchSVG(
     nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj, &ropts);
     Tcl_DecrRefCount(dataObj);
     if (nsvgImage != NULL) {
-	*widthPtr = ceil(nsvgImage->width * ropts.scale);
-	*heightPtr = ceil(nsvgImage->height * ropts.scale);
+	*widthPtr = (int) ceil(nsvgImage->width * ropts.scale);
+	*heightPtr = (int) ceil(nsvgImage->height * ropts.scale);
+        if ((*widthPtr <= 0) || (*heightPtr <= 0)) {
+            nsvgDelete(nsvgImage);
+            return 0;
+        }
 	if (!CacheSVG(interp, chan, formatObj, nsvgImage, &ropts)) {
 	    nsvgDelete(nsvgImage);
 	}
@@ -135,6 +178,25 @@ FileMatchSVG(
     }
     return 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FileReadSVG --
+ *
+ *	This function is called by the photo image type to read SVG format
+ *	data from a file and write it into a given photo image.
+ *
+ * Results:
+ *	A standard TCL completion code. If TCL_ERROR is returned then an error
+ *	message is left in the interp's result.
+ *
+ * Side effects:
+ *	The access position in file f is changed, and new data is added to the
+ *	image given by imageHandle.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 FileReadSVG(
@@ -158,7 +220,7 @@ FileReadSVG(
 	if (Tcl_ReadChars(chan, dataObj, -1, 0) == -1) {
 	    /* in case of an error reading the file */
 	    Tcl_DecrRefCount(dataObj);
-	    Tcl_SetResult(interp, "read error", TCL_STATIC);
+	    Tcl_SetObjResult(interp, Tcl_NewStringObj("read error", -1));
 	    Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "READ_ERROR", NULL);
 	    return TCL_ERROR;
 	}
@@ -173,6 +235,24 @@ FileReadSVG(
     return RasterizeSVG(interp, imageHandle, nsvgImage, destX, destY,
 		width, height, srcX, srcY, &ropts);
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * StringMatchSVG --
+ *
+ *	This function is invoked by the photo image type to see if a string
+ *	contains image data in SVG format.
+ *
+ * Results:
+ *	The return value is >0 if the file can be successfully parsed,
+ *	and 0 otherwise.
+ *
+ * Side effects:
+ *	The file is saved in the internal cache for further use.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 StringMatchSVG(
@@ -190,8 +270,12 @@ StringMatchSVG(
     data = Tcl_GetStringFromObj(dataObj, &length);
     nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj, &ropts);
     if (nsvgImage != NULL) {
-	*widthPtr = ceil(nsvgImage->width * ropts.scale);
-	*heightPtr = ceil(nsvgImage->height * ropts.scale);
+	*widthPtr = (int) ceil(nsvgImage->width * ropts.scale);
+	*heightPtr = (int) ceil(nsvgImage->height * ropts.scale);
+        if ((*widthPtr <= 0) || (*heightPtr <= 0)) {
+            nsvgDelete(nsvgImage);
+            return 0;
+        }
 	if (!CacheSVG(interp, dataObj, formatObj, nsvgImage, &ropts)) {
 	    nsvgDelete(nsvgImage);
 	}
@@ -199,6 +283,24 @@ StringMatchSVG(
     }
     return 0;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * StringReadSVG --
+ *
+ *	This function is called by the photo image type to read SVG format
+ *	data from a string and write it into a given photo image.
+ *
+ * Results:
+ *	A standard TCL completion code. If TCL_ERROR is returned then an error
+ *	message is left in the interp's result.
+ *
+ * Side effects:
+ *	New data is added to the image given by imageHandle.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 StringReadSVG(
@@ -227,6 +329,21 @@ StringReadSVG(
 		width, height, srcX, srcY, &ropts);
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * ParseSVGWithOptions --
+ *
+ *	This function is called to parse the given input string as SVG.
+ *
+ * Results:
+ *	Return a newly create NSVGimage on success, and NULL otherwise.
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
 static NSVGimage *
 ParseSVGWithOptions(
     Tcl_Interp *interp,
@@ -242,10 +359,10 @@ ParseSVGWithOptions(
     char *inputCopy = NULL;
     NSVGimage *nsvgImage;
     static const char *const fmtOptions[] = {
-        "-dpi", "-scale", "-unit", "-x", "-y", NULL
+        "-dpi", "-scale", "-unit", NULL
     };
     enum fmtOptions {
-	OPT_DPI, OPT_SCALE, OPT_UNIT, OPT_X, OPT_Y
+	OPT_DPI, OPT_SCALE, OPT_UNIT
     };
 
     /*
@@ -255,7 +372,7 @@ ParseSVGWithOptions(
 
     inputCopy = attemptckalloc(length+1);
     if (inputCopy == NULL) {
-	Tcl_SetResult(interp, "cannot alloc data buffer", TCL_STATIC);
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot alloc data buffer", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "OUT_OF_MEMORY", NULL);
 	goto error;
     }
@@ -291,6 +408,7 @@ ParseSVGWithOptions(
 
 	if (objc < 2) {
 	    ckfree(inputCopy);
+	    inputCopy = NULL;
 	    Tcl_WrongNumArgs(interp, 1, objv, "value");
 	    goto error;
 	}
@@ -331,22 +449,12 @@ ParseSVGWithOptions(
 		unit[2] = '\0';
 	    }
 	    break;
-	case OPT_X:
-	    if (Tcl_GetDoubleFromObj(interp, objv[0], &ropts->x) == TCL_ERROR) {
-	        goto error;
-	    }
-	    break;
-	case OPT_Y:
-	    if (Tcl_GetDoubleFromObj(interp, objv[0], &ropts->y) == TCL_ERROR) {
-	        goto error;
-	    }
-	    break;
 	}
     }
 
-    nsvgImage = nsvgParse(inputCopy, unit, dpi);
+    nsvgImage = nsvgParse(inputCopy, unit, (float) dpi);
     if (nsvgImage == NULL) {
-        Tcl_SetResult(interp, "cannot parse SVG image", TCL_STATIC);
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot parse SVG image", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "PARSE_ERROR", NULL);
 	goto error;
     }
@@ -359,6 +467,25 @@ error:
     }
     return NULL;
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * RasterizeSVG --
+ *
+ *	This function is called to rasterize the given nsvgImage and
+ *	fill the imageHandle with data.
+ *
+ * Results:
+ *	A standard TCL completion code. If TCL_ERROR is returned then an error
+ *	message is left in the interp's result.
+ *
+ *
+ * Side effects:
+ *	On error the given nsvgImage will be deleted.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static int
 RasterizeSVG(
@@ -375,23 +502,23 @@ RasterizeSVG(
     unsigned char *imgData;
     Tk_PhotoImageBlock svgblock;
 
-    w = ceil(nsvgImage->width * ropts->scale);
-    h = ceil(nsvgImage->height * ropts->scale);
+    w = (int) ceil(nsvgImage->width * ropts->scale);
+    h = (int) ceil(nsvgImage->height * ropts->scale);
     rast = nsvgCreateRasterizer();
     if (rast == NULL) {
-	Tcl_SetResult(interp, "cannot initialize rasterizer", TCL_STATIC);
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot initialize rasterizer", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "RASTERIZER_ERROR",
 		NULL);
 	goto cleanAST;
     }
     imgData = attemptckalloc(w * h *4);
     if (imgData == NULL) {
-	Tcl_SetResult(interp, "cannot alloc image buffer", TCL_STATIC);
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot alloc image buffer", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "OUT_OF_MEMORY", NULL);
 	goto cleanRAST;
     }
-    nsvgRasterize(rast, nsvgImage, ropts->x, ropts->y,
-	    ropts->scale, imgData, w, h, w * 4);
+    nsvgRasterize(rast, nsvgImage, (float) ropts->x, (float) ropts->y,
+	    (float) ropts->scale, imgData, w, h, w * 4);
     /* transfer the data to a photo block */
     svgblock.pixelPtr = imgData;
     svgblock.width = w;
@@ -425,6 +552,53 @@ cleanAST:
     return TCL_ERROR;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * GetCachePtr --
+ *
+ *	This function is called to get the per interpreter used
+ *	svg image cache.
+ *
+ * Results:
+ * 	Return a pointer to the used cache.
+ *
+ * Side effects:
+ *	Initialize the cache on the first call.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static NSVGcache *
+GetCachePtr(
+    Tcl_Interp *interp
+) {
+    NSVGcache *cachePtr = Tcl_GetAssocData(interp, "tksvgnano", NULL);
+    if (cachePtr == NULL) {
+	cachePtr = ckalloc(sizeof(NSVGcache));
+	cachePtr->dataOrChan = NULL;
+	Tcl_DStringInit(&cachePtr->formatString);
+	cachePtr->nsvgImage = NULL;
+	Tcl_SetAssocData(interp, "tksvgnano", FreeCache, cachePtr);
+    }
+    return cachePtr;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * CacheSVG --
+ *
+ *	Add the given svg image informations to the cache for further usage.
+ *
+ * Results:
+ *	Return 1 on success, and 0 otherwise.
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
 static int
 CacheSVG(
     Tcl_Interp *interp,
@@ -435,7 +609,7 @@ CacheSVG(
 {
     int length;
     const char *data;
-    NSVGcache *cachePtr = Tcl_GetAssocData(interp, "tksvg", NULL);
+    NSVGcache *cachePtr = GetCachePtr(interp);
 
     if (cachePtr != NULL) {
         cachePtr->dataOrChan = dataOrChan;
@@ -450,6 +624,22 @@ CacheSVG(
     return 0;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * GetCachedSVG --
+ *
+ *	Try to get the NSVGimage from the internal cache.
+ *
+ * Results:
+ *	Return the found NSVGimage on success, and NULL otherwise.
+ *
+ * Side effects:
+ *	Calls the CleanCache() function.
+ *
+ *----------------------------------------------------------------------
+ */
+
 static NSVGimage *
 GetCachedSVG(
     Tcl_Interp *interp,
@@ -459,7 +649,7 @@ GetCachedSVG(
 {
     int length;
     const char *data;
-    NSVGcache *cachePtr = Tcl_GetAssocData(interp, "tksvg", NULL);
+    NSVGcache *cachePtr = GetCachePtr(interp);
     NSVGimage *nsvgImage = NULL;
 
     if ((cachePtr != NULL) && (cachePtr->nsvgImage != NULL) &&
@@ -481,10 +671,24 @@ GetCachedSVG(
     return nsvgImage;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * CleanCache --
+ *
+ *	Reset the cache and delete the saved image in it.
+ *
+ * Results:
+ *
+ * Side effects:
+ *
+ *----------------------------------------------------------------------
+ */
+
 static void
 CleanCache(Tcl_Interp *interp)
 {
-    NSVGcache *cachePtr = Tcl_GetAssocData(interp, "tksvg", NULL);
+    NSVGcache *cachePtr = GetCachePtr(interp);
 
     if (cachePtr != NULL) {
         cachePtr->dataOrChan = NULL;
@@ -495,6 +699,21 @@ CleanCache(Tcl_Interp *interp)
 	}
     }
 }
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FreeCache --
+ *
+ *	This function is called to clean up the internal cache data.
+ *
+ * Results:
+ *
+ * Side effects:
+ *	Existing image data in the cache and the cache will be deleted.
+ *
+ *----------------------------------------------------------------------
+ */
 
 static void
 FreeCache(ClientData clientData, Tcl_Interp *interp)
@@ -539,7 +758,7 @@ Tksvg_Init(Tcl_Interp *interp)
     Tcl_DStringInit(&cachePtr->formatString);
     cachePtr->nsvgImage = NULL;
     Tcl_SetAssocData(interp, "tksvg", FreeCache, cachePtr);
-    Tk_CreatePhotoImageFormat(&tkImgFmtSVG);
+    Tk_CreatePhotoImageFormat(&tkImgFmtSVGnano);
     Tcl_PkgProvide(interp, PACKAGE_NAME, PACKAGE_VERSION);
     return TCL_OK;
 }
