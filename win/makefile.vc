@@ -18,6 +18,7 @@
 
 PROJECT = tksvg
 NEED_TK = 1
+PRJ_DEFINES = -Dinline=__inline
 
 !include "rules-ext.vc"
 
