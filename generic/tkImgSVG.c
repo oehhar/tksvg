@@ -435,6 +435,10 @@ ParseSVGWithOptions(
 		goto error;
 	    }
 	    parameterScaleSeen = 1;
+		break;
+	case OPT_DPI:
+		/* no option restriction so always pass */
+		break;
 	}
 
 	/*
