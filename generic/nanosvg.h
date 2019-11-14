@@ -704,10 +704,10 @@ static void nsvg__deleteStyles(NSVGstyles* style) {
 	while (style) {
 		NSVGstyles *next = style->next;
 		if (style->name!= NULL)
-			free(style->name);
+			NANOSVG_free(style->name);
 		if (style->description != NULL)
-			free(style->description);
-		free(style);
+			NANOSVG_free(style->description);
+		NANOSVG_free(style);
 		style = next;
 	}
 }
@@ -2836,19 +2836,19 @@ static void nsvg__content(void* ud, const char* s)
 	if (p->styleFlag) {
 
 		int state = 0;
-		const char* start = NULL;		
+		const char* start = NULL;
 		while (*s) {
 			char c = *s;
 			if (nsvg__isspace(c) || c == '{') {
 				if (state == 1) {
 					NSVGstyles* next = p->styles;
 
-					p->styles = (NSVGstyles*)malloc(sizeof(NSVGstyles));
+					p->styles = (NSVGstyles*)NANOSVG_malloc(sizeof(NSVGstyles));
 					p->styles->next = next;
 					p->styles->name = nsvg__strndup(start, (size_t)(s - start));
 					start = s + 1;
 					state = 2;
-				}				
+				}
 			} else if (state == 2 && c == '}') {
 				p->styles->description = nsvg__strndup(start, (size_t)(s - start));
 				state = 0;
@@ -2856,7 +2856,7 @@ static void nsvg__content(void* ud, const char* s)
 			else if (state == 0) {
 				start = s;
 				state = 1;
-			}  
+			}
 			s++;
 		/*
 			if (*s == '{' && state == NSVG_XML_CONTENT) {
