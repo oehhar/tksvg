@@ -255,7 +255,7 @@ FileMatchSVG(
         return 0;
     }
     numBytesRead = Tcl_ReadChars(chan, dataObj, MAX_MATCH_BYTES, 0);
-    if (numBytesRead == TCL_IO_FAILURE) {
+    if (numBytesRead == -1) {
         /* in case of an error reading the file */
         Tcl_DecrRefCount(dataObj);
         return 0;
@@ -311,7 +311,7 @@ FileReadSVG(
     Tcl_Obj *dataObj = Tcl_NewObj();
     (void)fileName;
 
-    if (Tcl_ReadChars(chan, dataObj, -1, 0) == TCL_IO_FAILURE) {
+    if (Tcl_ReadChars(chan, dataObj, -1, 0) == -1) {
         /* in case of an error reading the file */
         Tcl_DecrRefCount(dataObj);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("read error", -1));
