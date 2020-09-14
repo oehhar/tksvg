@@ -11,26 +11,8 @@
  * this file, and for a DISCLAIMER OF ALL WARRANTIES.
  *
  * This handler is build using the original nanosvg library files from
- * https://github.com/memononen/nanosvg 
- *
- *
- * Below is the original copyright for nanoSVG
- * 
- * Copyright (c) 2013 Mikko Mononen memon@inside.org
- *
- * This software is provided 'as-is', without any express or implied
- * warranty.  In no event will the authors be held liable for any damages
- * arising from the use of this software.
- * Permission is granted to anyone to use this software for any purpose,
- * including commercial applications, and to alter it and redistribute it
- * freely, subject to the following restrictions:
- * 1. The origin of this software must not be misrepresented; you must not
- *    claim that you wrote the original software. If you use this software
- *    in a product, an acknowledgment in the product documentation would be
- *    appreciated but is not required.
- * 2. Altered source versions must be plainly marked as such, and must not be
- *    misrepresented as being the original software.
- * 3. This notice may not be removed or altered from any source distribution.
+ * https://github.com/memononen/nanosvg and the tcl extension files from
+ * https://github.com/auriocus/tksvg
  *
  */
 
@@ -374,7 +356,7 @@ ParseSVGWithOptions(
      * therefore first duplicate.
      */
 
-    inputCopy = attemptckalloc(length+1);
+    inputCopy = (char *)attemptckalloc(length+1);
     if (inputCopy == NULL) {
 	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot alloc data buffer", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "OUT_OF_MEMORY", NULL);
@@ -435,9 +417,9 @@ ParseSVGWithOptions(
 		goto error;
 	    }
 	    parameterScaleSeen = 1;
-		break;
+	    break;
 	default:
-		break;
+	    break;
 	}
 
 	/*
@@ -558,7 +540,7 @@ RasterizeSVG(
 		NULL);
 	goto cleanAST;
     }
-    imgData = attemptckalloc(w * h *4);
+    imgData = (unsigned char *)attemptckalloc(w * h *4);
     if (imgData == NULL) {
 	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot alloc image buffer", -1));
 	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "OUT_OF_MEMORY", NULL);
@@ -680,9 +662,9 @@ static NSVGcache *
 GetCachePtr(
     Tcl_Interp *interp
 ) {
-    NSVGcache *cachePtr = Tcl_GetAssocData(interp, "tksvgnano", NULL);
+    NSVGcache *cachePtr = (NSVGcache *)Tcl_GetAssocData(interp, "tksvgnano", NULL);
     if (cachePtr == NULL) {
-	cachePtr = ckalloc(sizeof(NSVGcache));
+	cachePtr = (NSVGcache *)ckalloc(sizeof(NSVGcache));
 	cachePtr->dataOrChan = NULL;
 	Tcl_DStringInit(&cachePtr->formatString);
 	cachePtr->nsvgImage = NULL;
@@ -825,7 +807,7 @@ CleanCache(Tcl_Interp *interp)
 static void
 FreeCache(ClientData clientData, Tcl_Interp *interp)
 {
-    NSVGcache *cachePtr = clientData;
+    NSVGcache *cachePtr = (NSVGcache *)clientData;
 
     Tcl_DStringFree(&cachePtr->formatString);
     if (cachePtr->nsvgImage != NULL) {

@@ -160,7 +160,7 @@ struct NSVGrasterizer
 };
 
 NANOSVG_SCOPE
-NSVGrasterizer* nsvgCreateRasterizer()
+NSVGrasterizer* nsvgCreateRasterizer(void)
 {
 	NSVGrasterizer* r = (NSVGrasterizer*)NANOSVG_malloc(sizeof(NSVGrasterizer));
 	if (r == NULL) goto error;
