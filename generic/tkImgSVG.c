@@ -24,6 +24,7 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
 #endif
@@ -213,7 +214,7 @@ FileMatchSVG(
 	Tcl_DecrRefCount(dataObj);
 	return 0;
     }
-    data = Tcl_GetStringFromObj(dataObj, &length);
+    data = TkGetStringFromObj(dataObj, &length);
     nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj, &ropts);
     Tcl_DecrRefCount(dataObj);
     if (nsvgImage != NULL) {
@@ -613,6 +614,14 @@ RasterizeSVG(
 		NULL);
 	goto cleanAST;
     }
+
+    /* Tk Ticket [822330269b] Check potential int overflow in following ckalloc */
+    if ( w * h < 0 || w * h > INT_MAX / 4) {
+	Tcl_SetObjResult(interp, Tcl_NewStringObj("image size overflow", -1));
+	Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "IMAGE_SIZE_OVERFLOW", NULL);
+	goto cleanRAST;
+    }
+
     imgData = (unsigned char *)attemptckalloc(w * h *4);
     if (imgData == NULL) {
 	Tcl_SetObjResult(interp, Tcl_NewStringObj("cannot alloc image buffer", -1));
