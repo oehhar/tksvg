@@ -2,7 +2,7 @@
 # Tcl package index file
 #
 # Do not load in Tk8.7 and higher, as it is contained there
-if { [package vcompare 8.7 [package version Tk]] <= 0 } {return}
+if { [package vcompare 8.7a1 [package version Tk]] <= 0 } {return}
 #
 package ifneeded @PACKAGE_NAME@ @PACKAGE_VERSION@ \
     [list load [file join $dir @PKG_LIB_FILE@] @PACKAGE_NAME@]
