@@ -1,8 +1,13 @@
 #
 # Tcl package index file
 #
-# Do not load in Tk8.7a1 and higher, as it is contained there
-if { [package vcompare 8.7a1 [package version Tk]] <= 0 } {return}
-#
+# On Tk 8.7 and higher, do a no-op load, as svg support is buildin.
+# As Tk may be loaded as a package, do the test on package require.
+# Note, that multiple Tk packages with different versions may be available.
+
 package ifneeded @PACKAGE_NAME@ @PACKAGE_VERSION@ \
-    [list load [file join $dir @PKG_LIB_FILE@] @PACKAGE_NAME@]
+	"if {\[package vcompare 8.7a0 \[package require Tk\]\] == 1} {
+		load [file join $dir @PKG_LIB_FILE@] @PACKAGE_NAME@
+	} else {
+		package provide @PACKAGE_NAME@ @PACKAGE_VERSION@
+	}"
