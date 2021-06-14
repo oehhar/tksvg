@@ -7,7 +7,7 @@
 
 package ifneeded @PACKAGE_NAME@ @PACKAGE_VERSION@ \
 	"if {\[package vcompare 8.7a0 \[package require Tk\]\] == 1} {
-		load [file join $dir @PKG_LIB_FILE@] @PACKAGE_NAME@
+		[list load [file join $dir @PKG_LIB_FILE@] @PACKAGE_NAME@]
 	} else {
 		package provide @PACKAGE_NAME@ @PACKAGE_VERSION@
 	}"
