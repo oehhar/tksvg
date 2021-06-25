@@ -42,7 +42,6 @@
 #include <tk.h>
 
 /* Adoption to use the original tk core file */
-#define TkGetStringFromObj Tcl_GetStringFromObj
 #ifndef TkSizeT
 #define TkSizeT int
 #endif
@@ -202,7 +201,7 @@ FileMatchSVG(
 	Tcl_DecrRefCount(dataObj);
 	return 0;
     }
-    data = TkGetStringFromObj(dataObj, &length);
+    data = Tcl_GetStringFromObj(dataObj, &length);
     /* should have a '<svg' and a '>' in the first 4k */
     if ((memchr(data, '>', length) == NULL) ||
 	(MemMem(data, length, "<svg", 4) == NULL)) {
@@ -214,7 +213,7 @@ FileMatchSVG(
 	Tcl_DecrRefCount(dataObj);
 	return 0;
     }
-    data = TkGetStringFromObj(dataObj, &length);
+    data = Tcl_GetStringFromObj(dataObj, &length);
     nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj, &ropts);
     Tcl_DecrRefCount(dataObj);
     if (nsvgImage != NULL) {
@@ -277,7 +276,7 @@ FileReadSVG(
 	    Tcl_SetErrorCode(interp, "TK", "IMAGE", "SVG", "READ_ERROR", NULL);
 	    return TCL_ERROR;
 	}
-	data = TkGetStringFromObj(dataObj, &length);
+	data = Tcl_GetStringFromObj(dataObj, &length);
 	nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj,
 			    &ropts);
 	Tcl_DecrRefCount(dataObj);
@@ -320,7 +319,7 @@ StringMatchSVG(
     NSVGimage *nsvgImage;
 
     CleanCache(interp);
-    data = TkGetStringFromObj(dataObj, &length);
+    data = Tcl_GetStringFromObj(dataObj, &length);
     /* should have a '<svg' and a '>' in the first 4k */
     testLength = (length > 4096) ? 4096 : length;
     if ((memchr(data, '>', testLength) == NULL) ||
@@ -376,7 +375,7 @@ StringReadSVG(
     NSVGimage *nsvgImage = GetCachedSVG(interp, dataObj, formatObj, &ropts);
 
     if (nsvgImage == NULL) {
-        data = TkGetStringFromObj(dataObj, &length);
+	data = Tcl_GetStringFromObj(dataObj, &length);
 	nsvgImage = ParseSVGWithOptions(interp, data, length, formatObj,
 			    &ropts);
     }
@@ -787,7 +786,7 @@ CacheSVG(
     if (cachePtr != NULL) {
         cachePtr->dataOrChan = dataOrChan;
 	if (formatObj != NULL) {
-	    data = TkGetStringFromObj(formatObj, &length);
+	    data = Tcl_GetStringFromObj(formatObj, &length);
 	    Tcl_DStringAppend(&cachePtr->formatString, data, length);
 	}
 	cachePtr->nsvgImage = nsvgImage;
@@ -828,7 +827,7 @@ GetCachedSVG(
     if ((cachePtr != NULL) && (cachePtr->nsvgImage != NULL) &&
 	(cachePtr->dataOrChan == dataOrChan)) {
         if (formatObj != NULL) {
-	    data = TkGetStringFromObj(formatObj, &length);
+	    data = Tcl_GetStringFromObj(formatObj, &length);
 	    if (strcmp(data, Tcl_DStringValue(&cachePtr->formatString)) == 0) {
 	        nsvgImage = cachePtr->nsvgImage;
 		*ropts = cachePtr->ropts;
