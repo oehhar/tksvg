@@ -34,9 +34,6 @@ jobs:
             - name: build library
               run: ./make-ci.sh
 
-            - name: Test
-              run: make test
-
             - name: upload result
               uses: actions/upload-artifact@v2
               with:
