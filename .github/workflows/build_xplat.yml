@@ -1,0 +1,44 @@
+name: build-and-release
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+
+defaults:
+    run:
+        shell: bash
+
+jobs:
+    build:
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                os: [macos-latest, ubuntu-18.04, windows-latest]
+        steps:
+            - name: checkout repo
+              uses: actions/checkout@v2
+            - name: Install git sdk
+              if: ${{ matrix.os == 'windows-latest' }}
+              uses: git-for-windows/setup-git-for-windows-sdk@v1
+              with:
+                flavor: full
+
+            - name: Set CFLAGS for macOS compatibility
+              if: ${{ matrix.os == 'macos-latest' }}
+              run: |
+                echo "CFLAGS=-mmacosx-version-min=10.13" >> $GITHUB_ENV
+                echo "MACOSX_DEPLOYMENT_TARGET=10.13" >> $GITHUB_ENV
+
+            - name: build library
+              run: ./make-ci.sh
+
+            - name: Test
+              run: make test
+
+            - name: upload result
+              uses: actions/upload-artifact@v2
+              with:
+                name: build-${{ matrix.os }}
+                path: dist/*.tar.bz2
