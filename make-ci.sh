@@ -26,9 +26,9 @@ tcldir="$kbskitdir/lib"
 
 rm -rf "$builddir"
 
-# autoconf
+autoconf
 
-./configure LDFLAGS="-L$tcldir" --with-tcl="$tcldir" --prefix="$builddir" --libdir="$builddir/lib" --exec-prefix="$kbskitdir"
+./configure LDFLAGS="-L$tcldir" --with-tcl="$tcldir" --with-tk="$tcldir" --prefix="$builddir" --libdir="$builddir/lib" --exec-prefix="$kbskitdir"
 make
 make install
 
