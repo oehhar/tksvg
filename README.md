@@ -10,3 +10,5 @@ Example usage:
 	set img [image create photo -file orb.svg]
 	pack [label .l -image $img]
  
+ Note: this package is not required for Tk 8.7, as this functionality is included in the core.
+ The package index file simulates a load on this version but actually does nothing.
