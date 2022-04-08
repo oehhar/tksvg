@@ -27,6 +27,8 @@
 #include <limits.h>
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
+#define roundf(x) floorf((x) + 0.5)
+
 #endif
 #include <math.h>
 #include <float.h>
