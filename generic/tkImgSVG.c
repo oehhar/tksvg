@@ -27,8 +27,9 @@
 #include <limits.h>
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
+#if _MSC_VER < 1300
 #define roundf(x) floorf((x) + 0.5)
-
+#endif
 #endif
 #include <math.h>
 #include <float.h>
