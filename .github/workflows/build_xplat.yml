@@ -15,18 +15,18 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [macos-latest, ubuntu-18.04, windows-latest]
+                os: [macos-10.15, ubuntu-18.04, windows-2019]
         steps:
             - name: checkout repo
               uses: actions/checkout@v2
             - name: Install git sdk
-              if: ${{ matrix.os == 'windows-latest' }}
+              if: ${{ matrix.os == 'windows-2019' }}
               uses: git-for-windows/setup-git-for-windows-sdk@v1
               with:
                 flavor: full
 
             - name: Set CFLAGS for macOS compatibility
-              if: ${{ matrix.os == 'macos-latest' }}
+              if: ${{ matrix.os == 'macos-10.15' }}
               run: |
                 echo "CFLAGS=-mmacosx-version-min=10.13" >> $GITHUB_ENV
                 echo "MACOSX_DEPLOYMENT_TARGET=10.13" >> $GITHUB_ENV
