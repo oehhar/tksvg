@@ -2533,20 +2533,19 @@ AC_DEFUN([TEA_TCL_LINK_LIBS], [
 #
 #	Might define the following vars:
 #		_ISOC99_SOURCE
-#		_LARGEFILE64_SOURCE
-#		_LARGEFILE_SOURCE64
+#		_FILE_OFFSET_BITS
 #
 #--------------------------------------------------------------------
 
 AC_DEFUN([TEA_TCL_EARLY_FLAG],[
     AC_CACHE_VAL([tcl_cv_flag_]translit($1,[A-Z],[a-z]),
 	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[$2]], [[$3]])],
-	    [tcl_cv_flag_]translit($1,[A-Z],[a-z])=no,[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[[#define ]$1[ 1
+	    [tcl_cv_flag_]translit($1,[A-Z],[a-z])=no,[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[[#define ]$1[ ]m4_default([$4],[1])[
 ]$2]], [[$3]])],
 	[tcl_cv_flag_]translit($1,[A-Z],[a-z])=yes,
 	[tcl_cv_flag_]translit($1,[A-Z],[a-z])=no)]))
     if test ["x${tcl_cv_flag_]translit($1,[A-Z],[a-z])[}" = "xyes"] ; then
-	AC_DEFINE($1, 1, [Add the ]$1[ flag when building])
+	AC_DEFINE($1, m4_default([$4],[1]), [Add the ]$1[ flag when building])
 	tcl_flags="$tcl_flags $1"
     fi
 ])
@@ -2556,10 +2555,10 @@ AC_DEFUN([TEA_TCL_EARLY_FLAGS],[
     tcl_flags=""
     TEA_TCL_EARLY_FLAG(_ISOC99_SOURCE,[#include <stdlib.h>],
 	[char *p = (char *)strtoll; char *q = (char *)strtoull;])
-    TEA_TCL_EARLY_FLAG(_LARGEFILE64_SOURCE,[#include <sys/stat.h>],
-	[struct stat64 buf; int i = stat64("/", &buf);])
-    TEA_TCL_EARLY_FLAG(_LARGEFILE_SOURCE64,[#include <sys/stat.h>],
-	[char *p = (char *)open64;])
+    if test "${TCL_MAJOR_VERSION}" -ne 8 ; then
+	TEA_TCL_EARLY_FLAG(_FILE_OFFSET_BITS,[#include <sys/stat.h>],
+	    [switch (0) { case 0: case (sizeof(off_t)==sizeof(long long)): ; }],64)
+    fi
     if test "x${tcl_flags}" = "x" ; then
 	AC_MSG_RESULT([none])
     else
@@ -2583,6 +2582,7 @@ AC_DEFUN([TEA_TCL_EARLY_FLAGS],[
 #		HAVE_STRUCT_DIRENT64, HAVE_DIR64
 #		HAVE_STRUCT_STAT64
 #		HAVE_TYPE_OFF64_T
+#		_TIME_BITS
 #
 #--------------------------------------------------------------------
 
@@ -2613,6 +2613,25 @@ AC_DEFUN([TEA_TCL_64BIT_FLAGS], [
 	AC_MSG_RESULT([${tcl_cv_type_64bit}])
 
 	# Now check for auxiliary declarations
+    if test "${TCL_MAJOR_VERSION}" -ne 8 ; then
+	    AC_CACHE_CHECK([for 64-bit time_t], tcl_cv_time_t_64,[
+		AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>]],
+		    [[switch (0) {case 0: case (sizeof(time_t)==sizeof(long long)): ;}]])],
+		    [tcl_cv_time_t_64=yes],[tcl_cv_time_t_64=no])])
+	    if test "x${tcl_cv_time_t_64}" = "xno" ; then
+		# Note that _TIME_BITS=64 requires _FILE_OFFSET_BITS=64
+		# which SC_TCL_EARLY_FLAGS has defined if necessary.
+		AC_CACHE_CHECK([if _TIME_BITS=64 enables 64-bit time_t], tcl_cv__time_bits,[
+		    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#define _TIME_BITS 64
+#include <sys/types.h>]],
+			[[switch (0) {case 0: case (sizeof(time_t)==sizeof(long long)): ;}]])],
+			[tcl_cv__time_bits=yes],[tcl_cv__time_bits=no])])
+		if test "x${tcl_cv__time_bits}" = "xyes" ; then
+		    AC_DEFINE(_TIME_BITS, 64, [_TIME_BITS=64 enables 64-bit time_t.])
+		fi
+	    fi
+	fi
+
 	AC_CACHE_CHECK([for struct dirent64], tcl_cv_struct_dirent64,[
 	    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <sys/types.h>
 #include <dirent.h>]], [[struct dirent64 p;]])],
@@ -3110,6 +3129,10 @@ AC_DEFUN([TEA_SETUP_COMPILER], [
 	fi
     fi
 
+    if test "${TCL_MAJOR_VERSION}" -lt 9 -a "${TCL_MINOR_VERSION}" -lt 7; then
+	    AC_DEFINE(Tcl_Size, int, [Is 'Tcl_Size' in <tcl.h>?])
+	fi
+
     #--------------------------------------------------------------------
     # Common compiler flag setup
     #--------------------------------------------------------------------
@@ -3207,7 +3230,7 @@ print("manifest needed")
 	    eval eval "PKG_LIB_FILE=${PACKAGE_LIB_PREFIX}${PACKAGE_NAME}${UNSHARED_LIB_SUFFIX}"
 	fi
 	# Some packages build their own stubs libraries
-	eval eval "PKG_STUB_LIB_FILE=${PACKAGE_LIB_PREFIX}${PACKAGE_NAME}stub${UNSHARED_LIB_SUFFIX}"
+	eval eval "PKG_STUB_LIB_FILE=${PACKAGE_LIB_PREFIX8}${PACKAGE_NAME}stub${UNSHARED_LIB_SUFFIX}"
 	if test "$GCC" = "yes"; then
 	    PKG_STUB_LIB_FILE=lib${PKG_STUB_LIB_FILE}
 	fi
