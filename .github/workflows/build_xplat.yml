@@ -15,7 +15,7 @@ jobs:
         runs-on: ${{ matrix.os }}
         strategy:
             matrix:
-                os: [macos-12, ubuntu-20.04, windows-2022]
+                os: [macos-13, ubuntu-20.04, windows-2022]
         steps:
             - name: checkout repo
               uses: actions/checkout@v2
@@ -26,7 +26,7 @@ jobs:
                 flavor: full
 
             - name: Set CFLAGS for macOS compatibility
-              if: ${{ matrix.os == 'macos-12' }}
+              if: ${{ matrix.os == 'macos-13' }}
               run: |
                 echo "CFLAGS=-mmacosx-version-min=10.13" >> $GITHUB_ENV
                 echo "MACOSX_DEPLOYMENT_TARGET=10.13" >> $GITHUB_ENV
